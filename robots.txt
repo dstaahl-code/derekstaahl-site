@@ -1,0 +1,10 @@
+# robots.txt for derekstaahl.com
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://derekstaahl.com/sitemap.xml
+
+# Disallow 404 page from indexing (optional, handled by meta robots tag)
+Disallow: /404.html
