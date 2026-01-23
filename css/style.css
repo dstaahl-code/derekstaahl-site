@@ -695,16 +695,17 @@ a:focus {
   opacity: 0.7;
 }
 
-/* Responsive logo sizing - scale down on smaller screens */
+/* Responsive logo sizing - scale down and reduce density on smaller screens */
 @media (max-width: 1200px) {
   .hero-logo {
-    transform: scale(0.8);
+    width: 35px !important;
   }
 }
 
 @media (max-width: 768px) {
   .hero-logo {
-    transform: scale(0.6);
+    width: 28px !important;
+    opacity: 0.35 !important;
   }
   /* Hide every other logo on tablet */
   .hero-logo:nth-child(2n) {
@@ -714,14 +715,14 @@ a:focus {
 
 @media (max-width: 480px) {
   .hero-logo {
-    transform: scale(0.5);
+    width: 22px !important;
+    opacity: 0.3 !important;
   }
-  /* Hide more logos on mobile - show every 3rd */
-  .hero-logo:nth-child(2n),
-  .hero-logo:nth-child(3n) {
+  /* Aggressively hide logos on mobile - show only every 4th */
+  .hero-logo {
     display: none;
   }
-  .hero-logo:nth-child(6n) {
+  .hero-logo:nth-child(4n+1) {
     display: block;
   }
 }
