@@ -695,6 +695,37 @@ a:focus {
   opacity: 0.7;
 }
 
+/* Responsive logo sizing - scale down on smaller screens */
+@media (max-width: 1200px) {
+  .hero-logo {
+    transform: scale(0.8);
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-logo {
+    transform: scale(0.6);
+  }
+  /* Hide every other logo on tablet */
+  .hero-logo:nth-child(2n) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-logo {
+    transform: scale(0.5);
+  }
+  /* Hide more logos on mobile - show every 3rd */
+  .hero-logo:nth-child(2n),
+  .hero-logo:nth-child(3n) {
+    display: none;
+  }
+  .hero-logo:nth-child(6n) {
+    display: block;
+  }
+}
+
 /* --------------------------------------------------------------------------
    Reel Section
    -------------------------------------------------------------------------- */
