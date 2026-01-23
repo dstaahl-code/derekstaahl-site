@@ -1374,6 +1374,21 @@ a:focus {
   padding: var(--space-4xl) var(--space-md);
   text-align: center;
   position: relative;
+  overflow: hidden;
+}
+
+.page-header__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.page-header .container {
+  position: relative;
+  z-index: 1;
 }
 
 .page-header h1 {
