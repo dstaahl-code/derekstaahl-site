@@ -1339,6 +1339,19 @@ a:focus {
   color: var(--color-accent);
 }
 
+/* Tighten social links on mobile */
+@media (max-width: 480px) {
+  .social-links {
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .social-link {
+    font-size: 0.85rem;
+    min-width: auto;
+  }
+}
+
 /* --------------------------------------------------------------------------
    404 Page
    -------------------------------------------------------------------------- */
