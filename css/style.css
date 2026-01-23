@@ -715,12 +715,11 @@ a:focus {
 
 @media (max-width: 480px) {
   .hero-logo {
-    width: 22px !important;
-    opacity: 0.3 !important;
+    width: 28px !important;
+    opacity: 0.32 !important;
   }
-  /* Hide ~40% of logos on mobile (every 5th and every 5th-2) */
-  .hero-logo:nth-child(5n),
-  .hero-logo:nth-child(5n-2) {
+  /* Hide only every 4th logo (25% hidden, 75% visible) */
+  .hero-logo:nth-child(4n) {
     display: none;
   }
 }
