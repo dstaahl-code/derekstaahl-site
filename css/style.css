@@ -718,12 +718,10 @@ a:focus {
     width: 22px !important;
     opacity: 0.3 !important;
   }
-  /* Aggressively hide logos on mobile - show only every 4th */
-  .hero-logo {
+  /* Hide ~40% of logos on mobile (every 5th and every 5th-2) */
+  .hero-logo:nth-child(5n),
+  .hero-logo:nth-child(5n-2) {
     display: none;
-  }
-  .hero-logo:nth-child(4n+1) {
-    display: block;
   }
 }
 
