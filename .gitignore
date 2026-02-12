@@ -11,3 +11,10 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Secrets and config
+.env
+.env.*
+setup_*.py
+*credentials*
+*secrets*
