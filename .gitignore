@@ -12,6 +12,10 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Spec/planning docs (keep local, not public)
+generation-ai-booking-system-spec.md
+generation-ai-free-plan-spec.md
+
 # Secrets and config
 .env
 .env.*
