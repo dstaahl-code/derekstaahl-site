@@ -1493,6 +1493,234 @@ a:focus {
 }
 
 /* --------------------------------------------------------------------------
+   Generation AI Page
+   -------------------------------------------------------------------------- */
+:root {
+  --genai-green: #39ff14;
+  --genai-green-dim: #2db811;
+  --genai-glow: rgba(57, 255, 20, 0.3);
+  --genai-bg: #0f172a;
+  --genai-bg-light: #1e293b;
+}
+
+.genai-header {
+  background: var(--genai-bg);
+  color: var(--color-white);
+  padding: var(--space-4xl) var(--space-md) var(--space-2xl);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.genai-header__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 59px,
+      rgba(57, 255, 20, 0.04) 59px,
+      rgba(57, 255, 20, 0.04) 60px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 59px,
+      rgba(57, 255, 20, 0.04) 59px,
+      rgba(57, 255, 20, 0.04) 60px
+    );
+}
+
+.genai-header .container {
+  position: relative;
+  z-index: 1;
+}
+
+.genai-header__logo {
+  max-width: 500px;
+  width: 100%;
+  height: auto;
+  margin: 0 auto var(--space-lg);
+  display: block;
+}
+
+.genai-header__tagline {
+  color: rgba(57, 255, 20, 0.7);
+  font-size: 1.0625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.genai-header h1 {
+  color: var(--color-white);
+  margin-bottom: 0;
+  font-size: clamp(2.5rem, 7vw, 4rem);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.genai-header h1::after {
+  content: '';
+  display: block;
+  width: 60px;
+  height: 4px;
+  background: var(--genai-green);
+  margin: var(--space-lg) auto 0;
+}
+
+/* Episodes Section */
+.genai-episodes {
+  background: var(--genai-bg-light);
+  padding: var(--space-3xl) 0;
+}
+
+.genai-episodes .section-heading h2 {
+  color: var(--color-white);
+}
+
+.genai-episodes .section-heading h2::after {
+  background: var(--genai-green);
+}
+
+.genai-episodes .section-heading p {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Episode Card */
+.genai-episode {
+  max-width: 800px;
+  margin: 0 auto;
+  background: var(--genai-bg);
+  border: 1px solid rgba(57, 255, 20, 0.15);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.genai-episode + .genai-episode {
+  margin-top: var(--space-2xl);
+}
+
+.genai-episode:hover {
+  border-color: rgba(57, 255, 20, 0.4);
+  box-shadow: 0 0 30px rgba(57, 255, 20, 0.1);
+}
+
+.genai-episode__video {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  background: #000;
+}
+
+.genai-episode__video iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.genai-episode__body {
+  padding: var(--space-lg);
+}
+
+.genai-episode__number {
+  font-size: 0.75rem;
+  color: var(--genai-green);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: var(--space-sm);
+}
+
+.genai-episode__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  font-weight: 700;
+  color: var(--color-white);
+  margin-bottom: var(--space-sm);
+  line-height: 1.25;
+}
+
+.genai-episode__guest {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: var(--space-xs);
+}
+
+.genai-episode__date {
+  font-size: 0.8125rem;
+  color: var(--genai-green-dim);
+  margin-bottom: var(--space-md);
+}
+
+.genai-episode__description {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  margin-bottom: var(--space-md);
+}
+
+.genai-episode__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--genai-green);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color var(--transition-fast), text-shadow var(--transition-fast);
+}
+
+.genai-episode__link::after {
+  content: '\2192';
+  transition: transform var(--transition-fast);
+}
+
+.genai-episode__link:hover {
+  color: #fff;
+  text-shadow: 0 0 12px var(--genai-glow);
+  text-decoration: none;
+}
+
+.genai-episode__link:hover::after {
+  transform: translateX(4px);
+}
+
+/* Generation AI Responsive */
+@media (max-width: 768px) {
+  .genai-header {
+    padding: var(--space-2xl) var(--space-md) var(--space-xl);
+  }
+
+  .genai-header__logo {
+    max-width: 320px;
+  }
+
+  .genai-episode__body {
+    padding: var(--space-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .genai-header__logo {
+    max-width: 260px;
+  }
+
+  .genai-header__tagline {
+    font-size: 0.875rem;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* --------------------------------------------------------------------------
    Utility Classes
    -------------------------------------------------------------------------- */
 .visually-hidden {
