@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -20,9 +21,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 EPISODES_JSON = os.path.join(PROJECT_ROOT, "data", "episodes.json")
 
-# AZFamily YouTube channel
-CHANNEL_ID = "UCIrgpHvUm1FMtv-C1xwkJtw"
-YOUTUBE_RSS = f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
+# Generation AI playlist on the AZFamily YouTube channel
+PLAYLIST_ID = "PLJQ20huef_NwQoBRT-QSNP3vl9hoV4OWy"
+YOUTUBE_RSS = f"https://www.youtube.com/feeds/videos.xml?playlist_id={PLAYLIST_ID}"
 
 AZFAMILY_TECH_URL = "https://www.azfamily.com/news/technology/"
 
@@ -39,11 +40,20 @@ USER_AGENT = (
 )
 
 
-def fetch_url(url):
-    """Fetch a URL and return the response body as a string."""
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+def fetch_url(url, retries=3):
+    """Fetch a URL and return the response body as a string, with retries."""
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            if attempt < retries:
+                wait = 2 ** attempt
+                print(f"  Attempt {attempt} failed ({e}), retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def parse_youtube_rss():
@@ -204,9 +214,14 @@ def save_episodes(data):
 
 
 def main():
-    print(f"Fetching YouTube RSS feed for channel {CHANNEL_ID}...")
-    yt_episodes = parse_youtube_rss()
-    print(f"Found {len(yt_episodes)} Generation AI episode(s) in YouTube feed.")
+    print(f"Fetching YouTube RSS feed for playlist {PLAYLIST_ID}...")
+    try:
+        yt_episodes = parse_youtube_rss()
+    except Exception as e:
+        print(f"Error: Could not fetch YouTube RSS feed after retries: {e}", file=sys.stderr)
+        print("Exiting gracefully — will retry on next scheduled run.")
+        return 0
+    print(f"Found {len(yt_episodes)} episode(s) in playlist feed.")
 
     # Load existing data
     data = load_episodes()

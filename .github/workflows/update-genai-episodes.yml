@@ -1,9 +1,6 @@
 name: Update Generation AI Episodes
 
 on:
-  schedule:
-    # 4 AM UTC Thursday = 9 PM MST Wednesday
-    - cron: '0 4 * * 4'
   workflow_dispatch:
 
 permissions:
