@@ -1,15 +1,25 @@
 {
-  "lastUpdated": "2026-02-12T04:00:00Z",
+  "lastUpdated": "2026-02-19T16:08:56Z",
   "episodes": [
     {
       "number": 1,
       "title": "Most People Are Using AI Wrong; Here's How to Deploy It Like a Super User",
-      "guest": "Allie K. Miller \u2014 TIME's 100 Most Influential People in AI",
+      "guest": "Allie K. Miller — TIME's 100 Most Influential People in AI",
       "date": "2026-02-11",
       "dateFormatted": "February 11, 2026",
       "description": "In the debut episode of Generation AI, Allie K. Miller breaks down why most people are barely scratching the surface of what AI can do and shares the tactics that separate casual users from power users deploying it across their businesses and careers.",
       "youtubeId": "-KF5jSG4Bqs",
       "azfamilyUrl": "https://www.azfamily.com/2026/02/11/most-people-are-using-ai-wrong-heres-how-deploy-it-like-super-user/"
+    },
+    {
+      "number": 2,
+      "title": "AI Teachers Are Here? Inside Arizona’s 2-Hour AI School | Generation AI",
+      "guest": "",
+      "date": "2026-02-19",
+      "dateFormatted": "February 19, 2026",
+      "description": "Tonight on Generation AI, a real-world experiment is putting artificial intelligence in charge of the classroom.",
+      "youtubeId": "noFpCSe4q8w",
+      "azfamilyUrl": ""
     }
   ]
 }
