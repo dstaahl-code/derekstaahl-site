@@ -5,7 +5,7 @@ Personal portfolio website for Derek Staahl, Emmy-winning TV news anchor and rep
 
 **Live Site:** https://derekstaahl.com
 **Repository:** github.com/dstaahl-code/derekstaahl-site
-**Hosting:** Netlify (auto-deploys from GitHub main branch)
+**Hosting:** Netlify (CLI deploys via `npm run deploy`; GitHub auto-deploys disabled to save build minutes)
 
 ---
 
@@ -69,7 +69,7 @@ Built an automated pipeline that fetches new Generation AI episodes weekly and u
 2. **Python script** fetches the Generation AI YouTube playlist RSS feed
 3. **Scrapes azfamily.com** (best-effort) to find the matching article link
 4. **Writes new episodes** to `data/episodes.json`
-5. **Commits and pushes** to `main` → Netlify auto-deploys
+5. **Commits and pushes** to `main`, then **deploys to Netlify** via CLI (`npx netlify-cli deploy --prod`)
 6. **Client-side JS** fetches `episodes.json` and renders episode cards dynamically
 7. **Episode 1 stays hardcoded** in HTML as an SEO/no-JS fallback
 
@@ -89,12 +89,13 @@ Built an automated pipeline that fetches new Generation AI episodes weekly and u
 - **Episode filtering:** Regex `generation\s+ai` (case-insensitive) on video titles (safety check; playlist is already curated)
 - **Deduplication:** By `youtubeId` in JSON and `data-episode-id` attribute in DOM
 - **Retry logic:** `fetch_url` retries 3 times with exponential backoff (2s, 4s); exits gracefully if feed unreachable
-- **No API keys needed** - YouTube RSS is free/public, GitHub Actions uses built-in `GITHUB_TOKEN`
+- **No API keys needed for episode fetch** - YouTube RSS is free/public, GitHub Actions uses built-in `GITHUB_TOKEN`
+- **Netlify deploy from workflow** uses `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID` (stored as GitHub Actions secrets)
 - **Scheduling:** cron-job.org POSTs to GitHub workflow dispatch API (requires GitHub PAT with `workflow` scope)
 
 #### Derek's Weekly Workflow
 1. **Automatic:** New episode appears on site Wednesday night with video, title, date, description
-2. **Optional manual polish:** Edit `data/episodes.json` on GitHub to add `guest` name and tweak `description` (commit → Netlify redeploys)
+2. **Optional manual polish:** Edit `data/episodes.json` on GitHub to add `guest` name and tweak `description` (then pull locally and `npm run deploy`)
 3. **Manual trigger:** Can run workflow anytime from GitHub Actions tab if episode drops at non-standard time
 
 #### AZFamily Article Scraping
@@ -182,6 +183,28 @@ Removed `schedule:` trigger from the workflow (GitHub's cron runner had unreliab
 **Modified:** `.github/workflows/update-genai-episodes.yml`
 
 **Commit:** `187b149`
+
+## Session Log: February 19, 2026 (Part 2)
+
+### 4. Switched from Netlify auto-deploys to CLI deploys
+Disabled Netlify's GitHub auto-deploy integration to save build minutes. Site is now deployed from the command line.
+
+- **Local deploy:** `npm run deploy` (runs `npx netlify deploy --prod --dir=.`)
+- **Workflow deploy:** Added `Deploy to Netlify` step to `update-genai-episodes.yml` using `npx netlify-cli deploy --prod --dir=.`
+- **Netlify linked:** `.netlify/state.json` created via `netlify link` (gitignored)
+- **Site ID:** `f69d1d53-11d4-4cba-8d2b-7c982d2a52c9`
+
+**GitHub Actions secrets required:**
+- `NETLIFY_AUTH_TOKEN` - Personal access token from Netlify (app.netlify.com/user/applications)
+- `NETLIFY_SITE_ID` - `f69d1d53-11d4-4cba-8d2b-7c982d2a52c9`
+
+**Files created:** `package.json`
+**Files modified:** `.github/workflows/update-genai-episodes.yml`, `.gitignore`
+
+### 5. Updated copyright to 2026
+Footer copyright changed from 2025 to 2026 across all six pages: `index.html`, `generation-ai.html`, `about.html`, `contact.html`, `clips.html`, `404.html`.
+
+**Commit:** `057559a`
 
 ---
 
