@@ -22,3 +22,6 @@ generation-ai-free-plan-spec.md
 setup_*.py
 *credentials*
 *secrets*
+
+# Local Netlify folder
+.netlify

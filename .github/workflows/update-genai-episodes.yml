@@ -34,3 +34,10 @@ jobs:
           git add data/episodes.json
           git commit -m "Add new Generation AI episode(s)"
           git push
+
+      - name: Deploy to Netlify
+        if: steps.diff.outputs.changed == 'true'
+        run: npx netlify-cli deploy --prod --dir=.
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
