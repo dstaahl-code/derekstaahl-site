@@ -130,13 +130,13 @@
 
   var dynamicContainer = document.getElementById('genai-dynamic-episodes');
   if (dynamicContainer) {
-    fetch('/data/episodes.json')
+    fetch('/.netlify/functions/get-episodes')
       .then(function(response) {
         if (!response.ok) throw new Error('Failed to fetch episodes');
         return response.json();
       })
-      .then(function(data) {
-        if (!data.episodes || !data.episodes.length) return;
+      .then(function(records) {
+        if (!records || !records.length) return;
 
         // Find hardcoded episode IDs already in the DOM
         var hardcoded = document.querySelectorAll('[data-episode-id]');
@@ -145,61 +145,186 @@
           existingIds[el.getAttribute('data-episode-id')] = el;
         });
 
-        // Sort episodes newest first
-        var sorted = data.episodes.slice().sort(function(a, b) {
-          return b.date.localeCompare(a.date);
+        // Separate records into series groups and standalone episodes,
+        // preserving the sorted order from the server.
+        var renderOrder = [];  // [{type:'standalone', record} | {type:'series', key}]
+        var seriesMap = {};    // seriesKey -> array of records
+        var seriesSeen = {};
+
+        records.forEach(function(record) {
+          var series = record.fields['Series'] || '';
+          if (series) {
+            if (!seriesMap[series]) seriesMap[series] = [];
+            seriesMap[series].push(record);
+            if (!seriesSeen[series]) {
+              seriesSeen[series] = true;
+              renderOrder.push({ type: 'series', key: series });
+            }
+          } else {
+            renderOrder.push({ type: 'standalone', record: record });
+          }
         });
 
-        sorted.forEach(function(ep) {
-          // Hide hardcoded version if JSON has it (JSON becomes source of truth)
-          if (existingIds[ep.youtubeId]) {
-            existingIds[ep.youtubeId].style.display = 'none';
+        // Sort parts within each series by Part number
+        Object.keys(seriesMap).forEach(function(key) {
+          seriesMap[key].sort(function(a, b) {
+            return (a.fields['Part'] || 0) - (b.fields['Part'] || 0);
+          });
+        });
+
+        renderOrder.forEach(function(item) {
+          if (item.type === 'series') {
+            dynamicContainer.appendChild(buildSeriesCard(item.key, seriesMap[item.key], existingIds));
+          } else {
+            var node = buildEpisodeCard(item.record, existingIds);
+            if (node) dynamicContainer.appendChild(node);
           }
-
-          var article = document.createElement('article');
-          article.className = 'genai-episode fade-in fade-in--visible';
-          article.setAttribute('data-episode-id', ep.youtubeId);
-
-          var html = '<div class="genai-episode__video">'
-            + '<iframe src="https://www.youtube.com/embed/' + escapeAttr(ep.youtubeId) + '"'
-            + ' title="' + escapeHtml(ep.title) + '"'
-            + ' frameborder="0"'
-            + ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"'
-            + ' allowfullscreen loading="lazy"></iframe>'
-            + '</div>'
-            + '<div class="genai-episode__body">';
-
-          if (ep.number) {
-            html += '<p class="genai-episode__number">Episode ' + ep.number + '</p>';
-          }
-
-          html += '<h3 class="genai-episode__title">' + escapeHtml(ep.title) + '</h3>';
-
-          if (ep.guest) {
-            html += '<p class="genai-episode__guest">Guest: ' + escapeHtml(ep.guest) + '</p>';
-          }
-
-          if (ep.dateFormatted) {
-            html += '<p class="genai-episode__date">' + escapeHtml(ep.dateFormatted) + '</p>';
-          }
-
-          if (ep.description) {
-            html += '<p class="genai-episode__description">' + escapeHtml(ep.description) + '</p>';
-          }
-
-          if (ep.azfamilyUrl) {
-            html += '<a href="' + escapeAttr(ep.azfamilyUrl) + '" class="genai-episode__link"'
-              + ' target="_blank" rel="noopener">Watch on AZFamily</a>';
-          }
-
-          html += '</div>';
-          article.innerHTML = html;
-          dynamicContainer.appendChild(article);
         });
       })
       .catch(function() {
         // Fail silently -- hardcoded episodes remain visible
       });
+  }
+
+  function formatAirDate(dateStr) {
+    if (!dateStr) return '';
+    var parts = dateStr.split('-');
+    if (parts.length !== 3) return '';
+    var months = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+    var month = months[parseInt(parts[1], 10) - 1] || '';
+    var day = parseInt(parts[2], 10);
+    return month + ' ' + day + ', ' + parts[0];
+  }
+
+  function buildEpisodeCard(record, existingIds) {
+    var fields = record.fields;
+    var youtubeId = fields['YouTube ID'] || '';
+    if (!youtubeId) return null;
+
+    if (existingIds[youtubeId]) {
+      existingIds[youtubeId].style.display = 'none';
+    }
+
+    var article = document.createElement('article');
+    article.className = 'genai-episode fade-in fade-in--visible';
+    article.setAttribute('data-episode-id', youtubeId);
+
+    var html = '<div class="genai-episode__video">'
+      + '<iframe src="https://www.youtube.com/embed/' + escapeAttr(youtubeId) + '"'
+      + ' title="' + escapeHtml(fields['Title'] || '') + '"'
+      + ' frameborder="0"'
+      + ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"'
+      + ' allowfullscreen loading="lazy"></iframe>'
+      + '</div>'
+      + '<div class="genai-episode__body">';
+
+    if (fields['Episode Number']) {
+      html += '<p class="genai-episode__number">Episode ' + fields['Episode Number'] + '</p>';
+    }
+    html += '<h3 class="genai-episode__title">' + escapeHtml(fields['Title'] || '') + '</h3>';
+    if (fields['Guest']) {
+      html += '<p class="genai-episode__guest">Guest: ' + escapeHtml(fields['Guest']) + '</p>';
+    }
+    var dateFormatted = formatAirDate(fields['Air Date'] || '');
+    if (dateFormatted) {
+      html += '<p class="genai-episode__date">' + escapeHtml(dateFormatted) + '</p>';
+    }
+    if (fields['Description']) {
+      html += '<p class="genai-episode__description">' + escapeHtml(fields['Description']) + '</p>';
+    }
+    if (fields['AZFamily URL']) {
+      html += '<a href="' + escapeAttr(fields['AZFamily URL']) + '" class="genai-episode__link"'
+        + ' target="_blank" rel="noopener">Watch on AZFamily</a>';
+    }
+    html += '</div>';
+    article.innerHTML = html;
+    return article;
+  }
+
+  function buildSeriesCard(seriesKey, parts, existingIds) {
+    // Hide any hardcoded versions of these episodes
+    parts.forEach(function(record) {
+      var ytId = record.fields['YouTube ID'] || '';
+      if (ytId && existingIds[ytId]) {
+        existingIds[ytId].style.display = 'none';
+      }
+    });
+
+    var firstId = parts[0].fields['YouTube ID'] || '';
+    var firstTitle = parts[0].fields['Title'] || '';
+
+    var html = '<div class="genai-episode__video">'
+      + '<iframe src="https://www.youtube.com/embed/' + escapeAttr(firstId) + '"'
+      + ' title="' + escapeHtml(firstTitle) + '"'
+      + ' frameborder="0"'
+      + ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"'
+      + ' allowfullscreen loading="lazy"></iframe>'
+      + '</div>'
+      + '<div class="genai-episode__body">'
+      + '<p class="genai-series__label">Multi-part series</p>'
+      + '<h3 class="genai-episode__title">' + escapeHtml(seriesKey) + '</h3>'
+      + '<div class="genai-series__tabs">';
+
+    parts.forEach(function(record, i) {
+      var ytId = record.fields['YouTube ID'] || '';
+      var partNum = record.fields['Part'] || (i + 1);
+      html += '<button class="genai-series__tab' + (i === 0 ? ' genai-series__tab--active' : '') + '"'
+        + ' data-part="' + i + '"'
+        + ' data-youtube-id="' + escapeAttr(ytId) + '"'
+        + ' data-title="' + escapeAttr(record.fields['Title'] || '') + '">'
+        + 'Part ' + escapeHtml(String(partNum))
+        + '</button>';
+    });
+
+    html += '</div>'; // close .genai-series__tabs
+
+    parts.forEach(function(record, i) {
+      var dateFormatted = formatAirDate(record.fields['Air Date'] || '');
+      var description = record.fields['Description'] || '';
+      var azfamilyUrl = record.fields['AZFamily URL'] || '';
+
+      html += '<div class="genai-series__panel' + (i === 0 ? ' genai-series__panel--active' : '') + '" data-part="' + i + '">';
+      if (dateFormatted) {
+        html += '<p class="genai-episode__date">' + escapeHtml(dateFormatted) + '</p>';
+      }
+      if (description) {
+        html += '<p class="genai-episode__description">' + escapeHtml(description) + '</p>';
+      }
+      if (azfamilyUrl) {
+        html += '<a href="' + escapeAttr(azfamilyUrl) + '" class="genai-episode__link"'
+          + ' target="_blank" rel="noopener">Watch on AZFamily</a>';
+      }
+      html += '</div>'; // close .genai-series__panel
+    });
+
+    html += '</div>'; // close .genai-episode__body
+
+    var article = document.createElement('article');
+    article.className = 'genai-episode fade-in fade-in--visible';
+    article.innerHTML = html;
+
+    // Attach tab click handlers after innerHTML is set
+    var iframe = article.querySelector('iframe');
+    var tabs = article.querySelectorAll('.genai-series__tab');
+    var panels = article.querySelectorAll('.genai-series__panel');
+
+    tabs.forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var partIdx = parseInt(this.dataset.part, 10);
+
+        iframe.src = 'https://www.youtube.com/embed/' + this.dataset.youtubeId;
+        iframe.title = this.dataset.title;
+
+        tabs.forEach(function(t) { t.classList.remove('genai-series__tab--active'); });
+        this.classList.add('genai-series__tab--active');
+
+        panels.forEach(function(p) { p.classList.remove('genai-series__panel--active'); });
+        panels[partIdx].classList.add('genai-series__panel--active');
+      });
+    });
+
+    return article;
   }
 
   function escapeHtml(str) {

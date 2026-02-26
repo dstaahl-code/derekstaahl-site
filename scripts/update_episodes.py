@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Fetch new Generation AI episodes from the AZFamily YouTube channel RSS feed,
-optionally scrape azfamily.com for the matching article link, and update
-data/episodes.json.
+Fetch new Generation AI episodes from the AZFamily YouTube playlist RSS feed,
+optionally scrape azfamily.com for the matching article link, and write new
+episodes to Airtable.
+
+Falls back to data/episodes.json if AIRTABLE_API_KEY and AIRTABLE_BASE_ID
+are not set (for local testing without credentials).
 
 Uses only Python standard library -- no pip install needed.
 """
@@ -12,6 +15,8 @@ import os
 import re
 import sys
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -26,6 +31,9 @@ PLAYLIST_ID = "PLJQ20huef_NwQoBRT-QSNP3vl9hoV4OWy"
 YOUTUBE_RSS = f"https://www.youtube.com/feeds/videos.xml?playlist_id={PLAYLIST_ID}"
 
 AZFAMILY_TECH_URL = "https://www.azfamily.com/news/technology/"
+
+AIRTABLE_BASE_URL = "https://api.airtable.com/v0"
+AIRTABLE_TABLE = "YouTube%20Videos"
 
 # Namespaces used in the YouTube RSS feed
 YT_NS = "http://www.youtube.com/xml/schemas/2015"
@@ -149,12 +157,8 @@ class AZFamilyLinkParser(HTMLParser):
             self._in_a = False
             href = self._current_href
             text = self._current_text.strip()
-            # Check if this link is related to Generation AI
             if GENAI_PATTERN.search(text) or GENAI_PATTERN.search(href):
-                self.links.append({
-                    "href": href,
-                    "text": text,
-                })
+                self.links.append({"href": href, "text": text})
 
 
 def scrape_azfamily_links():
@@ -174,29 +178,137 @@ def match_article_url(episode_title, azfamily_links):
     if not azfamily_links:
         return ""
 
-    # Normalize the episode title for matching
     title_words = set(re.findall(r"\w+", episode_title.lower()))
-
     best_match = ""
     best_score = 0
 
     for link in azfamily_links:
-        # Score by word overlap between episode title and link text/URL
         link_words = set(re.findall(r"\w+", (link["text"] + " " + link["href"]).lower()))
         overlap = len(title_words & link_words)
         if overlap > best_score:
             best_score = overlap
             best_match = link["href"]
 
-    # Require at least 3 overlapping words to consider it a match
     if best_score >= 3:
-        # Ensure it's a full URL
         if best_match.startswith("/"):
             best_match = "https://www.azfamily.com" + best_match
         return best_match
 
     return ""
 
+
+# =============================================================================
+# Airtable
+# =============================================================================
+
+def airtable_request(method, url, api_key, body=None):
+    """Make an Airtable API request and return parsed JSON."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "User-Agent": USER_AGENT,
+    }
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Airtable API error {e.code}: {body_text}") from e
+
+
+def get_airtable_episodes(base_id, api_key):
+    """Return (existing_video_ids dict, max_episode_number) from Airtable."""
+    existing = {}  # youtube_id -> record_id
+    max_ep_num = 0
+    offset = None
+
+    while True:
+        params = [
+            ("fields[]", "YouTube ID"),
+            ("fields[]", "Episode Number"),
+        ]
+        if offset:
+            params.append(("offset", offset))
+
+        url = (
+            f"{AIRTABLE_BASE_URL}/{base_id}/{AIRTABLE_TABLE}"
+            f"?{urllib.parse.urlencode(params)}"
+        )
+        result = airtable_request("GET", url, api_key)
+
+        for record in result.get("records", []):
+            fields = record.get("fields", {})
+            yt_id = fields.get("YouTube ID", "")
+            ep_num = fields.get("Episode Number") or 0
+            if yt_id:
+                existing[yt_id] = record["id"]
+            if ep_num > max_ep_num:
+                max_ep_num = int(ep_num)
+
+        offset = result.get("offset")
+        if not offset:
+            break
+
+    return existing, max_ep_num
+
+
+def create_airtable_episode(base_id, api_key, ep, ep_number, azfamily_url):
+    """POST a new episode record to Airtable. Returns the new record ID."""
+    thumbnail_url = f"https://img.youtube.com/vi/{ep['youtubeId']}/maxresdefault.jpg"
+
+    fields = {
+        "Title": ep["title"],
+        "Episode Number": ep_number,
+        "YouTube ID": ep["youtubeId"],
+        "Thumbnail URL": thumbnail_url,
+        "Air Date": ep["date"],
+        "Show on Website": True,
+    }
+    if ep["description"]:
+        fields["Description"] = ep["description"]
+    if azfamily_url:
+        fields["AZFamily URL"] = azfamily_url
+
+    url = f"{AIRTABLE_BASE_URL}/{base_id}/{AIRTABLE_TABLE}"
+    result = airtable_request("POST", url, api_key, body={"fields": fields})
+    return result.get("id")
+
+
+def write_episodes_to_airtable(episodes_with_urls, base_id, api_key):
+    """Write new episodes to Airtable. Returns count of created records."""
+    print("Querying Airtable for existing episodes...")
+    existing_ids, max_ep_num = get_airtable_episodes(base_id, api_key)
+    print(
+        f"Found {len(existing_ids)} existing episode(s) in Airtable "
+        f"(max episode #{max_ep_num})."
+    )
+
+    created = 0
+    next_ep_num = max_ep_num
+
+    for ep, azfamily_url in episodes_with_urls:
+        if ep["youtubeId"] in existing_ids:
+            print(f"  Skipping (already in Airtable): {ep['title']}")
+            continue
+
+        next_ep_num += 1
+        record_id = create_airtable_episode(base_id, api_key, ep, next_ep_num, azfamily_url)
+        print(f"  Created record {record_id}: {ep['title']} (Episode #{next_ep_num})")
+        if azfamily_url:
+            print(f"    AZFamily: {azfamily_url}")
+        created += 1
+
+    return created
+
+
+# =============================================================================
+# JSON fallback (used when Airtable env vars are not set)
+# =============================================================================
 
 def load_episodes():
     """Load existing episodes.json."""
@@ -213,58 +325,86 @@ def save_episodes(data):
         f.write("\n")
 
 
-def main():
-    print(f"Fetching YouTube RSS feed for playlist {PLAYLIST_ID}...")
-    try:
-        yt_episodes = parse_youtube_rss()
-    except Exception as e:
-        print(f"Error: Could not fetch YouTube RSS feed after retries: {e}", file=sys.stderr)
-        print("Exiting gracefully — will retry on next scheduled run.")
-        return 0
-    print(f"Found {len(yt_episodes)} episode(s) in playlist feed.")
+def write_episodes_to_json(episodes_with_urls, existing_data):
+    """Append new episodes to data/episodes.json. Returns count added."""
+    existing_ids = {ep["youtubeId"] for ep in existing_data["episodes"]}
+    added = 0
 
-    # Load existing data
-    data = load_episodes()
-    existing_ids = {ep["youtubeId"] for ep in data["episodes"]}
-
-    # Scrape AZFamily (best-effort)
-    print("Scraping azfamily.com for article links...")
-    azfamily_links = scrape_azfamily_links()
-    print(f"Found {len(azfamily_links)} Generation AI link(s) on azfamily.com.")
-
-    # Find new episodes
-    new_episodes = []
-    for ep in yt_episodes:
+    for ep, azfamily_url in episodes_with_urls:
         if ep["youtubeId"] in existing_ids:
             print(f"  Skipping (already exists): {ep['title']}")
             continue
 
-        article_url = match_article_url(ep["title"], azfamily_links)
-
         new_ep = {
-            "number": len(data["episodes"]) + len(new_episodes) + 1,
+            "number": len(existing_data["episodes"]) + added + 1,
             "title": ep["title"],
             "guest": "",
             "date": ep["date"],
             "dateFormatted": ep["dateFormatted"],
             "description": ep["description"],
             "youtubeId": ep["youtubeId"],
-            "azfamilyUrl": article_url,
+            "azfamilyUrl": azfamily_url,
         }
-        new_episodes.append(new_ep)
+        existing_data["episodes"].append(new_ep)
         print(f"  New episode: {ep['title']}")
-        if article_url:
-            print(f"    AZFamily article: {article_url}")
+        if azfamily_url:
+            print(f"    AZFamily article: {azfamily_url}")
         else:
             print("    No AZFamily article found (can be added manually)")
+        added += 1
 
-    if new_episodes:
-        data["episodes"].extend(new_episodes)
-        data["lastUpdated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        save_episodes(data)
-        print(f"\nAdded {len(new_episodes)} new episode(s) to {EPISODES_JSON}")
+    return added
+
+
+def main():
+    airtable_api_key = os.environ.get("AIRTABLE_API_KEY")
+    airtable_base_id = os.environ.get("AIRTABLE_BASE_ID")
+    use_airtable = bool(airtable_api_key and airtable_base_id)
+
+    if use_airtable:
+        print("Airtable credentials found -- writing to Airtable.")
     else:
-        print("\nNo new episodes found.")
+        print("No Airtable credentials -- falling back to data/episodes.json.")
+
+    print(f"Fetching YouTube RSS feed for playlist {PLAYLIST_ID}...")
+    try:
+        yt_episodes = parse_youtube_rss()
+    except Exception as e:
+        print(f"Error: Could not fetch YouTube RSS feed after retries: {e}", file=sys.stderr)
+        print("Exiting gracefully -- will retry on next scheduled run.")
+        return 0
+    print(f"Found {len(yt_episodes)} episode(s) in playlist feed.")
+
+    # Scrape AZFamily (best-effort)
+    print("Scraping azfamily.com for article links...")
+    azfamily_links = scrape_azfamily_links()
+    print(f"Found {len(azfamily_links)} Generation AI link(s) on azfamily.com.")
+
+    # Pair each episode with its matched AZFamily URL
+    episodes_with_urls = [
+        (ep, match_article_url(ep["title"], azfamily_links))
+        for ep in yt_episodes
+    ]
+
+    if use_airtable:
+        try:
+            created = write_episodes_to_airtable(episodes_with_urls, airtable_base_id, airtable_api_key)
+            if created:
+                print(f"\nCreated {created} new episode(s) in Airtable.")
+            else:
+                print("\nNo new episodes to add.")
+        except Exception as e:
+            print(f"Error writing to Airtable: {e}", file=sys.stderr)
+            return 1
+    else:
+        data = load_episodes()
+        added = write_episodes_to_json(episodes_with_urls, data)
+        if added:
+            data["lastUpdated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            save_episodes(data)
+            print(f"\nAdded {added} new episode(s) to {EPISODES_JSON}")
+        else:
+            print("\nNo new episodes found.")
 
     return 0
 

@@ -1694,6 +1694,54 @@ a:focus {
   transform: translateX(4px);
 }
 
+/* Series multi-part card */
+.genai-series__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--genai-green-dim);
+  margin-bottom: var(--space-xs);
+}
+
+.genai-series__tabs {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin: var(--space-md) 0;
+}
+
+.genai-series__tab {
+  background: transparent;
+  border: 1px solid rgba(57, 255, 20, 0.3);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0.35rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.genai-series__tab:hover {
+  border-color: var(--genai-green);
+  color: var(--genai-green);
+}
+
+.genai-series__tab--active {
+  background: rgba(57, 255, 20, 0.12);
+  border-color: var(--genai-green);
+  color: var(--genai-green);
+}
+
+.genai-series__panel {
+  display: none;
+}
+
+.genai-series__panel--active {
+  display: block;
+}
+
 /* Generation AI Responsive */
 @media (max-width: 768px) {
   .genai-header {
