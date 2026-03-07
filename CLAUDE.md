@@ -208,6 +208,51 @@ Footer copyright changed from 2025 to 2026 across all six pages: `index.html`, `
 
 ---
 
+## Session Log: February 25, 2026
+
+### 1. Migrated episode data from JSON file to Airtable
+Replaced `data/episodes.json` as the episode source of truth with a dedicated Airtable table called `YouTube Videos`. The Python script now writes directly to Airtable when `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` env vars are present; falls back to JSON for local testing without credentials.
+
+**Airtable table:** `YouTube Videos` (separate from the dashboard's `Episodes` table)
+**Fields:** `Title`, `Episode Number`, `YouTube ID`, `Thumbnail URL`, `Air Date`, `Description`, `AZFamily URL`, `Guest`, `Show on Website`, `Series`, `Part`
+
+**Modified:** `scripts/update_episodes.py`
+
+### 2. Added Netlify Function to proxy Airtable reads
+Created `netlify/functions/get-episodes.js` — a server-side proxy that fetches from Airtable and returns episode records filtered by `{Show on Website}=1`, sorted by Episode Number descending. API key never exposed to the browser. 5-minute cache header.
+
+**Created:** `netlify/functions/get-episodes.js`, `netlify.toml`
+
+### 3. Updated frontend to fetch from Netlify Function
+Changed `js/main.js` to fetch from `/.netlify/functions/get-episodes` instead of `/data/episodes.json`. Added field mapping for Airtable's record format. Refactored episode rendering into `buildEpisodeCard()` and `buildSeriesCard()` helper functions. Added `formatAirDate()` utility.
+
+**Modified:** `js/main.js`
+
+### 4. Added series/carousel UI for multi-part episodes
+Episodes sharing the same `Series` field value in Airtable render as a single grouped card with Part 1 / Part 2 / Part 3 tab switcher. Clicking a tab swaps the embedded video (single iframe, src swap on click) and toggles the metadata panel. Standalone episodes render unchanged.
+
+**Added CSS classes:** `.genai-series__label`, `.genai-series__tabs`, `.genai-series__tab`, `.genai-series__tab--active`, `.genai-series__panel`, `.genai-series__panel--active`
+
+**Modified:** `css/style.css`
+
+### 5. Simplified GitHub Actions workflow
+Removed the `contents: write` permission, `Check for changes` step, `Commit and push` step, and `Deploy to Netlify` step. Workflow now just runs the Python script with `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` secrets — no git operations needed since Airtable is the data store and the site reads live data via the Netlify Function.
+
+**Modified:** `.github/workflows/update-genai-episodes.yml`
+
+**Commit:** `0a28242`
+
+---
+
+## Session Log: March 7, 2026
+
+### 1. Fixed cron-job.org PAT — workflow never firing
+Diagnosed why the Generation AI Video Grabber workflow had not run since Feb 19. Found two PATs on GitHub: "cron-job.org trigger for Gen AI videos" (Never used) and "cron-job.org trigger" (used within last week). The correct scoped token was never wired into cron-job.org. Regenerated the "cron-job.org trigger for Gen AI videos" PAT and updated the Authorization header in cron-job.org. Confirmed fix with a manual test run — received `204 No Content` from GitHub, workflow fired successfully.
+
+**No files modified** (configuration-only fix in cron-job.org and GitHub PAT settings)
+
+---
+
 ## Related Files (Not in Repo)
 - `/Users/derekstaahl/Documents/Gemini Photos/background-composition.html` - Original HTML composition tool used to design the logo mosaic layout
 - `generation-ai-booking-system-spec.md` - Guest booking system spec (Airtable, Cal.com, Make.com pipeline)
