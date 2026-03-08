@@ -131,19 +131,9 @@ After deployment:
 3. Verify ownership using Netlify DNS or HTML file method
 4. Submit your sitemap: `https://derekstaahl.com/sitemap.xml`
 
-## Adding Analytics
+## Analytics
 
-The site includes a placeholder for Plausible Analytics. To enable:
-
-1. Sign up at [plausible.io](https://plausible.io)
-2. Add your domain
-3. Uncomment the analytics script in each HTML file's `<head>`:
-
-```html
-<script defer data-domain="derekstaahl.com" src="https://plausible.io/js/script.js"></script>
-```
-
-Alternative: Use Netlify Analytics (paid feature) - no code changes needed.
+Analytics are handled by Netlify Analytics (server-side, no client code needed).
 
 ## Testing Locally
 
