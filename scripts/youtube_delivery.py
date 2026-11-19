@@ -80,17 +80,28 @@ def validate_fields(fields):
     if len(encoded) > 32768:
         raise DeliveryError('Video request exceeds the dashboard byte limit')
 
-def prepare(episodes_with_urls, path, run_id, call=request):
+def _when(value):
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        moment = datetime.strptime(value, '%Y-%m-%d')
+    return moment.timestamp() if moment.tzinfo else moment.replace(tzinfo=timezone.utc).timestamp()
+
+def prepare(episodes_with_urls, path, run_id, call=request, enrich=None):
     _, agent = _credential()
     listing = call('youtubeVideos.list', {})['data']['records']
     seen = {r['fields'].get('YouTube ID') for r in listing}
     requests = []
+    order = []
     for ep, article in episodes_with_urls:
         video_id = ep['youtubeId']
         if video_id in seen:
             continue
         if not re.fullmatch(r'[A-Za-z0-9_-]{11}', video_id):
             raise DeliveryError('Invalid YouTube video ID')
+        if enrich:
+            # Only new videos need a watch-page lookup (date and description).
+            ep = enrich(ep)
         fields = {'Title': ep['title'], 'YouTube ID': video_id, 'Air Date': ep['date']}
         if ep.get('description'):
             fields['Description'] = ep['description']
@@ -98,7 +109,10 @@ def prepare(episodes_with_urls, path, run_id, call=request):
             fields['AZFamily URL'] = article
         validate_fields(fields)
         requests.append({'key': str(uuid.uuid4()), 'operation': 'youtubeVideos.create', 'params': {'fields': fields, 'dry_run': False}})
+        order.append(ep.get('published') or ep['date'])
         seen.add(video_id)
+    # Oldest first, so the dashboard numbers new episodes in airing order.
+    requests = [r for _, r in sorted(zip(order, requests), key=lambda pair: _when(pair[0]))]
     if len(requests) > 100:
         raise DeliveryError('Review an unexpectedly large video import before delivery')
     box = {'version': 1, 'agentId': agent, 'runId': str(run_id), 'requests': requests}

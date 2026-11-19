@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Fetch new Generation AI episodes from the AZFamily YouTube playlist RSS feed,
-optionally scrape azfamily.com for the matching article link, and write new
-episodes to Airtable.
+Fetch new full Generation AI episodes (24 minutes or longer) from the AZFamily
+YouTube playlist page, optionally scrape azfamily.com for the matching article
+link, and save new episodes (through the dashboard in production).
+
+The playlist RSS feed is no longer used: it returns only the first 15 videos in
+playlist order, so newer episodes never appeared (see youtube_playlist.py).
 
 Falls back to data/episodes.json if AIRTABLE_API_KEY and AIRTABLE_BASE_ID
 are not set (for local testing without credentials).
@@ -22,6 +25,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from youtube_playlist import full_episodes, video_details  # noqa: E402
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -63,6 +69,11 @@ def fetch_url(url, retries=3):
                 time.sleep(wait)
             else:
                 raise
+
+
+def fetch_full_episodes():
+    """Full episodes from the playlist page, in playlist order (no details yet)."""
+    return full_episodes(PLAYLIST_ID)
 
 
 def parse_youtube_rss():
@@ -391,14 +402,14 @@ def main():
     else:
         print("No Airtable credentials -- falling back to data/episodes.json.")
 
-    print(f"Fetching YouTube RSS feed for playlist {PLAYLIST_ID}...")
+    print(f"Reading YouTube playlist {PLAYLIST_ID}...")
     try:
-        yt_episodes = parse_youtube_rss()
+        yt_episodes = fetch_full_episodes()
     except Exception as e:
-        print(f"Error: Could not fetch YouTube RSS feed after retries: {e}", file=sys.stderr)
-        print("Exiting gracefully -- will retry on next scheduled run.")
-        return 1 if backend == 'dashboard' else 0
-    print(f"Found {len(yt_episodes)} episode(s) in playlist feed.")
+        # Fail the run: a silent "nothing new" hid missing episodes for months.
+        print(f"Error: Could not read the YouTube playlist: {e}", file=sys.stderr)
+        return 1
+    print(f"Found {len(yt_episodes)} full episode(s) (24 minutes or longer) in the playlist.")
 
     # Scrape AZFamily (best-effort)
     print("Scraping azfamily.com for article links...")
@@ -413,8 +424,10 @@ def main():
 
     if backend == 'dashboard':
         from youtube_delivery import prepare
-        prepare(episodes_with_urls, args.prepare_dashboard, os.environ.get('GITHUB_RUN_ID', 'local'))
+        prepare(episodes_with_urls, args.prepare_dashboard, os.environ.get('GITHUB_RUN_ID', 'local'), enrich=video_details)
         return 0
+    # Legacy local paths: look up every episode's date and description.
+    episodes_with_urls = [(video_details(ep), url) for ep, url in episodes_with_urls]
     if use_airtable:
         try:
             created = write_episodes_to_airtable(episodes_with_urls, airtable_base_id, airtable_api_key)

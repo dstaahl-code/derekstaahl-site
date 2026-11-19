@@ -45,11 +45,20 @@ class DeliveryTests(unittest.TestCase):
   with self.assertRaises(y.DeliveryError):y.load(self.path,'123')
  def test_existing_airtable_mode_is_unchanged(self):
   import update_episodes as u
-  with patch.dict(os.environ,{'YOUTUBE_DATA_BACKEND':'airtable','AIRTABLE_API_KEY':'fixture','AIRTABLE_BASE_ID':'appFixture'}),patch.object(sys,'argv',['update_episodes.py']),patch.object(u,'parse_youtube_rss',return_value=[EP]),patch.object(u,'scrape_azfamily_links',return_value=[]),patch.object(u,'write_episodes_to_airtable',return_value=0) as write:
+  with patch.dict(os.environ,{'YOUTUBE_DATA_BACKEND':'airtable','AIRTABLE_API_KEY':'fixture','AIRTABLE_BASE_ID':'appFixture'}),patch.object(sys,'argv',['update_episodes.py']),patch.object(u,'fetch_full_episodes',return_value=[EP]),patch.object(u,'video_details',side_effect=lambda e:e),patch.object(u,'scrape_azfamily_links',return_value=[]),patch.object(u,'write_episodes_to_airtable',return_value=0) as write:
    self.assertEqual(u.main(),0);write.assert_called_once_with([(EP,'')],'appFixture','fixture')
  def test_main_dashboard_requires_preparation_and_cannot_fall_back(self):
   import update_episodes as u
-  with patch.dict(os.environ,{'YOUTUBE_DATA_BACKEND':'dashboard'}),patch.object(sys,'argv',['update_episodes.py']),patch.object(u,'parse_youtube_rss') as fetch:
+  with patch.dict(os.environ,{'YOUTUBE_DATA_BACKEND':'dashboard'}),patch.object(sys,'argv',['update_episodes.py']),patch.object(u,'fetch_full_episodes') as fetch:
    with self.assertRaises(SystemExit):u.main()
    fetch.assert_not_called()
+ def test_only_new_videos_are_looked_up_and_ordered_oldest_first(self):
+  newer={'title':'Newer','youtubeId':'nnnnnnnnnnn'};older={'title':'Older','youtubeId':'ooooooooooo'};known={'title':'Known','youtubeId':'kkkkkkkkkkk'}
+  looked=[]
+  def enrich(e):
+   looked.append(e['youtubeId']);dates={'nnnnnnnnnnn':'2026-11-18T18:00:33-08:00','ooooooooooo':'2026-03-18T19:04:06-07:00'}
+   return {**e,'date':dates[e['youtubeId']][:10],'published':dates[e['youtubeId']],'description':'d'}
+  box=y.prepare([(newer,''),(known,''),(older,'')],self.path,'123',call=lambda *_:{'data':{'records':[{'fields':{'YouTube ID':'kkkkkkkkkkk'}}]}},enrich=enrich)
+  self.assertEqual(sorted(looked),['nnnnnnnnnnn','ooooooooooo'])
+  self.assertEqual([r['params']['fields']['YouTube ID'] for r in box['requests']],['ooooooooooo','nnnnnnnnnnn'])
 if __name__=='__main__':unittest.main()
