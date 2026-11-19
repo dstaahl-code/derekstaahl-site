@@ -72,8 +72,21 @@ def fetch_url(url, retries=3):
 
 
 def fetch_full_episodes():
-    """Full episodes from the playlist page, in playlist order (no details yet)."""
+    """Full episodes in playlist order. With YOUTUBE_API_KEY (the workflow) they
+    come complete from the YouTube Data API; otherwise from the playlist page,
+    with details looked up later on each new video's watch page."""
+    key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if key:
+        from youtube_api import full_episodes as api_full_episodes
+        return api_full_episodes(PLAYLIST_ID, key)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        raise RuntimeError("Set the YOUTUBE_API_KEY Actions secret; YouTube's pages don't give GitHub video details")
     return full_episodes(PLAYLIST_ID)
+
+
+def details_for(ep):
+    """Episodes from the API already carry their date and description."""
+    return ep if ep.get("date") else video_details(ep)
 
 
 def parse_youtube_rss():
@@ -424,10 +437,10 @@ def main():
 
     if backend == 'dashboard':
         from youtube_delivery import prepare
-        prepare(episodes_with_urls, args.prepare_dashboard, os.environ.get('GITHUB_RUN_ID', 'local'), enrich=video_details)
+        prepare(episodes_with_urls, args.prepare_dashboard, os.environ.get('GITHUB_RUN_ID', 'local'), enrich=details_for)
         return 0
     # Legacy local paths: look up every episode's date and description.
-    episodes_with_urls = [(video_details(ep), url) for ep, url in episodes_with_urls]
+    episodes_with_urls = [(details_for(ep), url) for ep, url in episodes_with_urls]
     if use_airtable:
         try:
             created = write_episodes_to_airtable(episodes_with_urls, airtable_base_id, airtable_api_key)

@@ -36,6 +36,7 @@ jobs:
         env:
           YOUTUBE_AGENT_ID: ${{ vars.YOUTUBE_AGENT_ID }}
           YOUTUBE_AGENT_TOKEN: ${{ secrets.YOUTUBE_AGENT_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       - name: Archive requests before any save
         if: env.YOUTUBE_DATA_BACKEND == 'dashboard'
         uses: actions/upload-artifact@v4
