@@ -12,6 +12,8 @@ Standard library only.
 
 import json
 import re
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -22,6 +24,9 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 MAX_PAGES = 20  # 100 videos a page.
+# YouTube answers 429 when a runner opens many pages quickly (Nov. 19 backfill).
+RETRY_WAITS = (10, 30, 60)
+WATCH_PAUSE = 3  # seconds between watch-page lookups
 
 
 class PlaylistError(Exception):
@@ -36,9 +41,20 @@ def _get(url, data=None, fetch=None):
     if data is not None:
         headers["Content-Type"] = "application/json"
         body = json.dumps(data).encode()
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST" if body else "GET")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    for attempt, wait in enumerate((*RETRY_WAITS, None)):
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST" if body else "GET")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            if wait is None or (e.code != 429 and e.code < 500):
+                raise
+            print(f"  YouTube answered {e.code}; waiting {wait}s before retry {attempt + 1}...")
+            time.sleep(wait)
+        except urllib.error.URLError:
+            if wait is None:
+                raise
+            time.sleep(wait)
 
 
 def _json_after(html, marker):
@@ -185,8 +201,16 @@ def arizona_date(published):
     return moment.astimezone(ARIZONA).strftime("%Y-%m-%d")
 
 
+_last_watch = [0.0]
+
+
 def video_details(video, fetch=None):
     """Adds date, dateFormatted, description and published to a playlist video."""
+    if not fetch:
+        gap = WATCH_PAUSE - (time.monotonic() - _last_watch[0])
+        if gap > 0:
+            time.sleep(gap)
+        _last_watch[0] = time.monotonic()
     html = _get(f"https://www.youtube.com/watch?v={video['youtubeId']}", fetch=fetch)
     player = _json_after(html, "var ytInitialPlayerResponse =")
     details = player.get("videoDetails", {})

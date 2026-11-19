@@ -69,5 +69,31 @@ class PlaylistTests(unittest.TestCase):
             p.video_details({'youtubeId': 'eeeeeeeeeee', 'title': 't', 'seconds': 1600}, fetch=lambda u, d: html)
 
 
+class RetryTests(unittest.TestCase):
+    def test_429_is_retried_then_succeeds_and_other_errors_raise(self):
+        import urllib.error
+        from unittest.mock import patch
+        answers = [urllib.error.HTTPError('u', 429, 'Too Many Requests', {}, None), 'ok']
+        class Resp:
+            def __init__(self, text): self.text = text
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return self.text.encode()
+        def opener(req, timeout):
+            item = answers.pop(0)
+            if isinstance(item, Exception): raise item
+            return Resp(item)
+        with patch.object(p.urllib.request, 'urlopen', opener), patch.object(p.time, 'sleep') as slept:
+            self.assertEqual(p._get('https://example.test'), 'ok')
+            slept.assert_called_once_with(10)
+        with patch.object(p.urllib.request, 'urlopen', side_effect=urllib.error.HTTPError('u', 404, 'Not Found', {}, None)), patch.object(p.time, 'sleep'):
+            with self.assertRaises(urllib.error.HTTPError):
+                p._get('https://example.test')
+        with patch.object(p.urllib.request, 'urlopen', side_effect=urllib.error.HTTPError('u', 429, 'Too Many', {}, None)), patch.object(p.time, 'sleep') as slept:
+            with self.assertRaises(urllib.error.HTTPError):
+                p._get('https://example.test')
+            self.assertEqual([c.args[0] for c in slept.call_args_list], [10, 30, 60])
+
+
 if __name__ == '__main__':
     unittest.main()
