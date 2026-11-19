@@ -1,0 +1,47 @@
+name: Resume YouTube delivery
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Original video scan run ID
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: genai-youtube-delivery
+  queue: max
+  cancel-in-progress: false
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate original run ID
+        env:
+          ORIGINAL_RUN: ${{ inputs.run_id }}
+        run: python -c 'import os; assert os.environ["ORIGINAL_RUN"].isdigit(), "Use the numeric original run ID"'
+      - uses: actions/download-artifact@v4
+        with:
+          name: youtube-delivery-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: delivery
+      - name: Resume original requests only
+        env:
+          YOUTUBE_DATA_BACKEND: dashboard
+          YOUTUBE_AGENT_ID: ${{ vars.YOUTUBE_AGENT_ID }}
+          YOUTUBE_AGENT_TOKEN: ${{ secrets.YOUTUBE_AGENT_TOKEN }}
+          ORIGINAL_RUN: ${{ inputs.run_id }}
+        run: python scripts/update_episodes.py --deliver-dashboard delivery/youtube-outbox.json --expected-run-id "$ORIGINAL_RUN" --receipts delivery/youtube-resumed-receipts.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-resumed-receipts-${{ github.run_id }}
+          path: delivery/youtube-resumed-receipts.json
+          if-no-files-found: error
+          retention-days: 90

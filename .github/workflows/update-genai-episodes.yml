@@ -1,22 +1,61 @@
 name: Update Generation AI Episodes
-
 on:
   workflow_dispatch:
-
+permissions:
+  contents: read
+concurrency:
+  group: genai-youtube-delivery
+  queue: max
+  cancel-in-progress: false
+env:
+  YOUTUBE_DATA_BACKEND: ${{ vars.YOUTUBE_DATA_BACKEND || 'airtable' }}
 jobs:
   update-episodes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Fetch new episodes and write to Airtable
+      - name: Refuse dashboard-mode scan reruns
+        if: env.YOUTUBE_DATA_BACKEND == 'dashboard'
+        env:
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          test "$ATTEMPT" = "1" || { echo "Use Resume YouTube delivery with the original artifact, not another feed scan."; exit 1; }
+      - name: Fetch videos using the existing Airtable path
+        if: env.YOUTUBE_DATA_BACKEND != 'dashboard'
         run: python scripts/update_episodes.py
         env:
           AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
           AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+      - name: Prepare original dashboard delivery
+        if: env.YOUTUBE_DATA_BACKEND == 'dashboard'
+        run: python scripts/update_episodes.py --prepare-dashboard delivery/youtube-outbox.json
+        env:
+          YOUTUBE_AGENT_ID: ${{ vars.YOUTUBE_AGENT_ID }}
+          YOUTUBE_AGENT_TOKEN: ${{ secrets.YOUTUBE_AGENT_TOKEN }}
+      - name: Archive requests before any save
+        if: env.YOUTUBE_DATA_BACKEND == 'dashboard'
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-delivery-${{ github.run_id }}
+          path: delivery/youtube-outbox.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+      - name: Deliver saved video requests
+        if: env.YOUTUBE_DATA_BACKEND == 'dashboard'
+        run: python scripts/update_episodes.py --deliver-dashboard delivery/youtube-outbox.json --expected-run-id "$GITHUB_RUN_ID" --receipts delivery/youtube-receipts.json
+        env:
+          YOUTUBE_AGENT_ID: ${{ vars.YOUTUBE_AGENT_ID }}
+          YOUTUBE_AGENT_TOKEN: ${{ secrets.YOUTUBE_AGENT_TOKEN }}
+      - name: Archive confirmed receipts
+        if: env.YOUTUBE_DATA_BACKEND == 'dashboard'
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-receipts-${{ github.run_id }}
+          path: delivery/youtube-receipts.json
+          if-no-files-found: error
+          retention-days: 90

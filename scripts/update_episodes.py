@@ -10,6 +10,7 @@ are not set (for local testing without credentials).
 Uses only Python standard library -- no pip install needed.
 """
 
+import argparse
 import json
 import os
 import re
@@ -357,11 +358,35 @@ def write_episodes_to_json(episodes_with_urls, existing_data):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--prepare-dashboard')
+    parser.add_argument('--deliver-dashboard')
+    parser.add_argument('--receipts')
+    parser.add_argument('--expected-run-id')
+    args = parser.parse_args()
+    backend = os.environ.get('YOUTUBE_DATA_BACKEND', 'auto')
+    if backend not in ('auto', 'airtable', 'json', 'dashboard'):
+        print('Unsupported YouTube data backend', file=sys.stderr)
+        return 1
+    if args.deliver_dashboard:
+        if backend != 'dashboard' or not args.receipts or not args.expected_run_id:
+            parser.error('Dashboard delivery requires dashboard mode, --receipts and --expected-run-id')
+        from youtube_delivery import deliver
+        deliver(args.deliver_dashboard, args.expected_run_id, args.receipts)
+        return 0
+    if backend == 'dashboard' and not args.prepare_dashboard:
+        parser.error('Prepare and archive the original video delivery before submitting saves')
+    if args.prepare_dashboard and backend != 'dashboard':
+        parser.error('Use dashboard mode when preparing a saved dashboard delivery')
     airtable_api_key = os.environ.get("AIRTABLE_API_KEY")
     airtable_base_id = os.environ.get("AIRTABLE_BASE_ID")
-    use_airtable = bool(airtable_api_key and airtable_base_id)
+    use_airtable = backend in ('auto','airtable') and bool(airtable_api_key and airtable_base_id)
+    if backend == 'airtable' and not use_airtable:
+        raise RuntimeError('Airtable mode requires both configured credentials; no JSON fallback')
 
-    if use_airtable:
+    if backend == 'dashboard':
+        print("Preparing limited dashboard video delivery.")
+    elif use_airtable:
         print("Airtable credentials found -- writing to Airtable.")
     else:
         print("No Airtable credentials -- falling back to data/episodes.json.")
@@ -372,7 +397,7 @@ def main():
     except Exception as e:
         print(f"Error: Could not fetch YouTube RSS feed after retries: {e}", file=sys.stderr)
         print("Exiting gracefully -- will retry on next scheduled run.")
-        return 0
+        return 1 if backend == 'dashboard' else 0
     print(f"Found {len(yt_episodes)} episode(s) in playlist feed.")
 
     # Scrape AZFamily (best-effort)
@@ -386,6 +411,10 @@ def main():
         for ep in yt_episodes
     ]
 
+    if backend == 'dashboard':
+        from youtube_delivery import prepare
+        prepare(episodes_with_urls, args.prepare_dashboard, os.environ.get('GITHUB_RUN_ID', 'local'))
+        return 0
     if use_airtable:
         try:
             created = write_episodes_to_airtable(episodes_with_urls, airtable_base_id, airtable_api_key)

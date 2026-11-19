@@ -25,3 +25,10 @@ setup_*.py
 
 # Local Netlify folder
 .netlify
+
+# Saved delivery artifacts are never website assets or Git source.
+/delivery/
+
+# Local Python test caches.
+__pycache__/
+*.py[cod]
